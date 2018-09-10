@@ -33,10 +33,12 @@ import org.moonlightcontroller.topology.InstanceLocationSpecifier;
 import org.moonlightcontroller.topology.IApplicationTopology;
 import org.moonlightcontroller.topology.TopologyManager;
 import org.moonlightcontroller.events.IAlertListener;
+import org.moonlightcontroller.events.ICastleListener;
 import org.moonlightcontroller.events.IHandleClient;
 import org.moonlightcontroller.events.IInstanceUpListener;
 import org.moonlightcontroller.events.InstanceUpArgs;
 import org.moonlightcontroller.events.InstanceAlertArgs;
+import org.moonlightcontroller.events.InstanceCastleArgs;
 import org.moonlightcontroller.managers.models.IRequestSender;
 import org.moonlightcontroller.managers.models.messages.AlertMessage;
 import org.moonlightcontroller.managers.models.messages.Error;
@@ -66,23 +68,26 @@ public class Fake extends BoxApplication {
 		this.setStatements(statements);
 		this.setInstanceUpListener(new InstanceUpHandler());
 		this.setAlertListener(new FakeAlertListener());
+		this.setCastleListener(new FakeCastleListener());
 		this.setType(new ApplicationType(PROP_APPLICATION_TYPE));
 	}
 
 	private List<String> readPatterns(String path) {
 		List<String> result = new ArrayList<>();
-		
+		int ret = 0;
 		File f = new File(path);
-		
 		BufferedReader reader = null;
-		System.out.println("Reading patterns");
+		System.out.println("Reading patterns...");
 		try {
 			char len[] = new char[2];
 			int length;
 			reader = new BufferedReader(new FileReader(f));
 			int index = 0;
 			while (true) {
-				if (reader.read(len, 0, 2) < 2) {
+				ret = reader.read(len, 0, 2);
+				if (ret <= 0) {
+					break;
+				} else if (ret < 2) {
 					throw new EOFException();
 				}
 				length = (byte)len[0] << 8 | (byte)len[1];
@@ -96,7 +101,7 @@ public class Fake extends BoxApplication {
 				index++;
 			}
 		} catch (IOException e) {
-			LOG.severe("Error (" + e.getClass().getName() + ") while reading patterns from file: " + e.getMessage());
+			LOG.severe("Error (" + e.getClass().getName() + ") while reading patterns from file (MESSAGE=" + e.getMessage() + ")");
 		} finally {
 			if (reader != null) {
 				try { reader.close(); } catch (Exception e) { }
@@ -138,6 +143,15 @@ public class Fake extends BoxApplication {
 			
 		}
 	}
+
+	private class FakeCastleListener implements ICastleListener {
+		
+		@Override
+		public void Handle(InstanceCastleArgs args) {
+			org.moonlightcontroller.managers.models.messages.Castle castle = args.getCastle();
+			LOG.info("got a castle request from block:" + args.getBlock().getId());	
+		}
+	}
 	
 	private class FakeRequestSender implements IRequestSender {
 
@@ -162,15 +176,16 @@ public class Fake extends BoxApplication {
 				new HeaderClassifierRule.Builder().setHeaderMatch(h1).setPriority(Priority.HIGH).setOrder(0).build(),
 				new HeaderClassifierRule.Builder().setHeaderMatch(h2).setPriority(Priority.HIGH).setOrder(1).build()));
 		//FromDevice from = new FromDevice("FromDevice_FakeApp", "eth0", true, true);
-		FromDump from = new FromDump("FromDump_FakeApp", "/home/mininet/openbox/MoonlightFake/dummy_dump.pcap");
+		FromDump from = new FromDump("FromDump_FakeApp", "/home/mininet/openbox/MoonlightFake/dummy_dump.pcap", false, false);
 		ToDump to1 = new ToDump("ToDump1_FakeApp", "/home/mininet/hello_ssh.pcap");
 		ToDump to2 = new ToDump("ToDump2_FakeApp", "/home/mininet/hello_rest.pcap");
 		ToDump discard = new ToDump("ToDump3_FakeApp", "/home/mininet/hello_malicious.pcap");
 		List<String> dpiPatterns = readPatterns(PROP_PATTERNS_FILE);
 		HeaderClassifier classify = new HeaderClassifier("Classify_FakeApp", rules, Priority.HIGH, false);
 		List<StringMatcher> dpis = new LinkedList<>();
-		dpis.add(new StringMatcher("StringMatcher_WM_FakeApp", dpiPatterns, "wumanber")); // chhose from: wumanber, ahocorasick
+		dpis.add(new StringMatcher("StringMatcher_WM_FakeApp", dpiPatterns, "wumanber")); // chhose from: wumanber, ahocorasick, compressedahocorasick
 		dpis.add(new StringMatcher("StringMatcher_AC_FakeApp", dpiPatterns, "ahocorasick"));
+		dpis.add(new StringMatcher("StringMatcher_CAC_FakeApp", dpiPatterns, "compressedahocorasick"));
 		Alert alert = new Alert("Alert_Fake", "Alert from Fake", 1, true, 1000);
 		//Discard discard = new Discard("Discard_Snort");
 
