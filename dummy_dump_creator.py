@@ -14,7 +14,7 @@ class CorruptPatternFileError(Exception):
 class DummyDumpCreator(object):
 
     PATTERN_SIZE_LENGTH = 2
-    DUMMY_DST_IP = "127.0.0.1"
+    DUMMY_DST_IP = "10.0.0.2"
     DUMMY_DST_PORT = 12345
     DEFAULT_DUMP_NAME = "dummy_dump.pcap"
     DEAFULT_MAX_PATTERNS = 0
@@ -30,6 +30,9 @@ class DummyDumpCreator(object):
         self.extra_bytes = int((1.0 + expansion_factor) ** (1.0 + 7.0 * expansion_factor))
         self.max_patterns = max_patterns
         self.dump_name = dump_name
+        self.count_in = 0
+        self.count_out = 0
+        self.packets = []
 
     def read_patterns(self, filename):
         """
@@ -65,29 +68,56 @@ class DummyDumpCreator(object):
         return chr(used.index(False))
                 
     def create_dump(self, num_packets):
-        packets = []
-        count_in = 0
-        count_out = 0
+        self.packets = []
+        self.count_in = 0
+        self.count_out = 0
         for _ in xrange(num_packets):
-            patterns = self.patterns
+            patterns = self.patterns[:]
             random.shuffle(patterns)
             if self.max_patterns:
                 patterns = patterns[:self.max_patterns]
             patterns = deque(patterns)
             packet = Ether() / IP(dst=self.DUMMY_DST_IP) / TCP(dport=self.DUMMY_DST_PORT)
             payload = ""
-            while len(patterns) and len(payload) < 1536:
+            max_payload = 1500 - len(packet)
+            while len(patterns) and len(payload) < max_payload:
                 cur_pat = patterns.pop()
-                payload += cur_pat
+                payload += cur_pat[:min(len(cur_pat), max_payload - len(payload))]
+                if len(patterns) and len(payload) + self.extra_bytes + 1 < max_payload:
+                    payload += self.unused_char
+                    payload += os.urandom(self.extra_bytes)
+                self.count_out += self.extra_bytes 
+                self.count_in += len(cur_pat)
+            packet = packet / payload
+            self.packets.append(packet)
+
+    def write_to_dump(self):
+        ratio = float(self.count_in) / float(self.count_in + self.count_out)
+        print("Inside patterns: {}\nOutside patterns: {}\nIn/Out Ratio: {}".format(self.count_in, self.count_out, ratio))
+        wrpcap(self.dump_name, self.packets)
+
+    def gen_packet(self):
+        self.count_in = 0
+        self.count_out = 0
+        #start
+        patterns = self.patterns[:]
+        random.shuffle(patterns)
+        if self.max_patterns:
+            patterns = patterns[:self.max_patterns]
+        patterns = deque(patterns)
+        packet = Ether() / IP(dst=self.DUMMY_DST_IP) / TCP(dport=self.DUMMY_DST_PORT)
+        payload = ""
+        while len(patterns) and len(payload) < 1500:
+            cur_pat = patterns.pop()
+            payload += cur_pat[:min(len(cur_pat), 1500 - len(payload))]
+            # If last pattern to be added, dont add random bytes and separator.
+            if len(patterns) and len(payload) + self.extra_bytes + 1 < 1500:
                 payload += self.unused_char
                 payload += os.urandom(self.extra_bytes)
-                count_out += self.extra_bytes 
-                count_in += len(cur_pat)
-            packet = packet / payload
-            ratio = float(count_in) / float(count_in + count_out)
-            packets.append(packet)
-        print("Inside patterns: {}\nOutside patterns: {}\nIn/Out Ratio: {}".format(count_in, count_out, ratio))
-        wrpcap(self.dump_name, packets)
+                self.count_out += self.extra_bytes 
+            print len(payload)
+            self.count_in += len(cur_pat)
+        return packet / payload
 
 
 def parse_args():
