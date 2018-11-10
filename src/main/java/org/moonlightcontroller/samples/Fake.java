@@ -5,10 +5,14 @@ import java.io.EOFException;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.net.NetworkInterface;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.io.*;
+import java.net.*;
+import java.util.*;
 import java.util.LinkedList;
 import java.util.logging.Logger;
 
@@ -169,14 +173,25 @@ public class Fake extends BoxApplication {
 		}
 	}
 
-	private List<IStatement> createStatements() {
+	private List<IStatement> createStatements(){
+		String iface = "lo";
+		try {
+		Enumeration<NetworkInterface> nets = NetworkInterface.getNetworkInterfaces();
+        for (NetworkInterface netint : Collections.list(nets)) {
+			if (netint.getName().contains("eth0")) {
+				iface = netint.getName();
+			}
+		}
+		} catch (SocketException exp) {
+			System.out.print("socket exception while enumerating interfaces");
+		}
 		HeaderMatch h1 = new OpenBoxHeaderMatch.Builder().setExact(HeaderField.TCP_DST, new TransportPort(22)).build();
 		HeaderMatch h2 = new OpenBoxHeaderMatch.Builder().build();
 		ArrayList<HeaderClassifierRule> rules = new ArrayList<HeaderClassifierRule>(Arrays.asList(
 				new HeaderClassifierRule.Builder().setHeaderMatch(h1).setPriority(Priority.HIGH).setOrder(0).build(),
 				new HeaderClassifierRule.Builder().setHeaderMatch(h2).setPriority(Priority.HIGH).setOrder(1).build()));
-		//FromDevice from = new FromDevice("FromDevice_FakeApp", "eth0", true, true);
-		FromDump from = new FromDump("FromDump_FakeApp", "/home/mininet/openbox/MoonlightFake/dummy_dump.pcap", false, false);
+		FromDevice from = new FromDevice("FromDevice_FakeApp", iface, true, true);
+		//FromDump from = new FromDump("FromDump_FakeApp", "/home/mininet/openbox/MoonlightFake/dummy_dump.pcap", false, false);
 		ToDump to1 = new ToDump("ToDump1_FakeApp", "/home/mininet/hello_ssh.pcap");
 		ToDump to2 = new ToDump("ToDump2_FakeApp", "/home/mininet/hello_rest.pcap");
 		ToDump discard = new ToDump("ToDump3_FakeApp", "/home/mininet/hello_malicious.pcap");

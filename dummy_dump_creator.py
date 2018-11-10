@@ -4,6 +4,7 @@ from collections import deque
 import logging
 import argparse
 import random
+import socket
 import os
 
 
@@ -25,14 +26,17 @@ class DummyDumpCreator(object):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.patterns = []
         self.unused_char = None
-        self.concentration_facotor = concentration_factor
-        expansion_factor = 1 - self.concentration_facotor
-        self.extra_bytes = int((1.0 + expansion_factor) ** (1.0 + 7.0 * expansion_factor))
+        self.set_concentrarion(concentration_factor)
         self.max_patterns = max_patterns
         self.dump_name = dump_name
         self.count_in = 0
         self.count_out = 0
         self.packets = []
+
+    def set_concentrarion(self, concentration):
+        self.concentration_facotor = concentration
+        expansion_factor = 1 - self.concentration_facotor
+        self.extra_bytes = int((1.0 + expansion_factor) ** (1.0 + 7.0 * expansion_factor))
 
     def read_patterns(self, filename):
         """
@@ -66,7 +70,7 @@ class DummyDumpCreator(object):
             for char in patt:
                 used[ord(char)] = True
         return chr(used.index(False))
-                
+
     def create_dump(self, num_packets):
         self.packets = []
         self.count_in = 0
@@ -96,6 +100,36 @@ class DummyDumpCreator(object):
         print("Inside patterns: {}\nOutside patterns: {}\nIn/Out Ratio: {}".format(self.count_in, self.count_out, ratio))
         wrpcap(self.dump_name, self.packets)
 
+    def gen_payload(self, size):
+        self.count_in = 0
+        self.count_out = 0
+        #start
+        payload = ""
+        if not self.concentration_facotor:
+            payload = os.urandom(size)
+        else:
+            while len(payload) < size:
+                patterns = self.patterns[:]
+                random.shuffle(patterns)
+                if self.max_patterns:
+                    patterns = patterns[:self.max_patterns]
+                patterns = deque(patterns)
+                payload_size = len(payload)
+                while len(patterns) and len(payload) - payload_size < 1500:
+                    cur_pat = patterns.pop()
+                    payload += cur_pat
+                    # If last pattern to be added, dont add random bytes and separator.
+                    if len(patterns):
+                        payload += self.unused_char
+                        payload += os.urandom(self.extra_bytes)
+                        self.count_out += self.extra_bytes 
+                        self.count_in += len(cur_pat)
+            ratio = float(self.count_in) / float(self.count_in + self.count_out)
+            print("Inside patterns: {}\nOutside patterns: {}\nIn/Out Ratio: {}".format(self.count_in, self.count_out, ratio))
+        with open("temp_payload", "w+") as f_payload:
+            f_payload.write(payload)
+        return payload
+
     def gen_packet(self):
         self.count_in = 0
         self.count_out = 0
@@ -118,6 +152,16 @@ class DummyDumpCreator(object):
             print len(payload)
             self.count_in += len(cur_pat)
         return packet / payload
+
+    def send_spam(self, dest_addr, concentration, size):
+        self.set_concentrarion(concentration)
+        payload = self.gen_payload(size)
+        print "Generated spam {}, ready to send".format(len(payload))
+        raw_input("Press ENTER to continue...")
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect(dest_addr)
+        sock.sendall(payload)
+        sock.close()
 
 
 def parse_args():
