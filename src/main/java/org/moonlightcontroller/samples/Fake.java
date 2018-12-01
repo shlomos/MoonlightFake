@@ -19,6 +19,8 @@ import java.util.logging.Logger;
 import org.openboxprotocol.exceptions.InstanceNotAvailableException;
 import org.moonlightcontroller.bal.BoxApplication;
 import org.moonlightcontroller.blocks.FromDevice;
+import org.moonlightcontroller.blocks.FromHost;
+import org.moonlightcontroller.blocks.ToHost;
 import org.moonlightcontroller.blocks.FromDump;
 import org.moonlightcontroller.blocks.HeaderClassifier;
 import org.moonlightcontroller.blocks.StringMatcher;
@@ -193,7 +195,9 @@ public class Fake extends BoxApplication {
 		FromDevice from = new FromDevice("FromDevice_FakeApp", iface, true, true);
 		//FromDump from = new FromDump("FromDump_FakeApp", "/home/mininet/openbox/MoonlightFake/dummy_dump.pcap", false, false);
 		ToDump to1 = new ToDump("ToDump1_FakeApp", "/home/mininet/hello_ssh.pcap");
-		ToDump to2 = new ToDump("ToDump2_FakeApp", "/home/mininet/hello_rest.pcap");
+		// ToDump to2 = new ToDump("ToDump2_FakeApp", "/home/mininet/hello_rest.pcap");
+		FromHost fh = new FromHost("FromHost_FakeApp", "virt");
+		ToHost th = new ToHost("ToHost_FakeApp", "virt");
 		ToDump discard = new ToDump("ToDump3_FakeApp", "/home/mininet/hello_malicious.pcap");
 		List<String> dpiPatterns = readPatterns(PROP_PATTERNS_FILE);
 		HeaderClassifier classify = new HeaderClassifier("Classify_FakeApp", rules, Priority.HIGH, false);
@@ -212,11 +216,12 @@ public class Fake extends BoxApplication {
 			List<IProcessingBlock> blocks = new ArrayList<>();
 
 			BlockProtector prot = BlockProtector.getInstance();
-			IProcessingGraph prot_hdr_clas = prot.getProtectedSubGraph(dpi, 2, 10, 2);
+			IProcessingGraph prot_hdr_clas = prot.getProtectedSubGraph(dpi, 2, 10, 1.2);
 			List<IProcessingBlock> prot_blocks = prot_hdr_clas.getBlocks();
 			IProcessingBlock prot_out = prot_blocks.get(prot_blocks.size() - 1);
 			blocks.addAll(prot_blocks);
-			blocks.addAll(ImmutableList.of(from, classify, alert, to1, to2, discard));
+			// blocks.addAll(ImmutableList.of(from, classify, alert, to1, discard, to2));
+			blocks.addAll(ImmutableList.of(from, classify, alert, to1, discard, fh, th));
 			connectors.addAll(prot_hdr_clas.getConnectors());
 			connectors.addAll(ImmutableList.of(
 					new Connector.Builder()
@@ -239,16 +244,27 @@ public class Fake extends BoxApplication {
 						.setSourceOutputPort(1)
 						.setDestBlock(alert)
 						.build(),
+					// new Connector.Builder()
+					// 	.setSourceBlock(prot_out)
+					// 	.setSourceOutputPort(0)
+					// 	.setDestBlock(to2)
+					// 	.build(),
 					new Connector.Builder()
 						.setSourceBlock(prot_out)
 						.setSourceOutputPort(0)
-						.setDestBlock(to2)
+						.setDestBlock(th)
 						.build(),
 					new Connector.Builder()
 						.setSourceBlock(alert)
 						.setSourceOutputPort(0)
 						.setDestBlock(discard)
-						.build()));
+						.build(),
+					new Connector.Builder()
+						.setSourceBlock(fh)
+						.setSourceOutputPort(0)
+						.setDestBlock(th)
+						.build()
+					));
 
 			IProcessingGraph graph = new ProcessingGraph.Builder()
 				.setBlocks(blocks)
