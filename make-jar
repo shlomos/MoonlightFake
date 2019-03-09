@@ -9,9 +9,17 @@ if [ ! -f $MOONLIGHT_PATH ]; then
 fi
 
 mkdir classes
-javac -d classes -classpath $MOONLIGHT_PATH:lib/guava-18.0.jar src/main/java/org/moonlightcontroller/samples/Fake.java
+javac -d classes -classpath $MOONLIGHT_PATH:lib/guava-18.0.jar:lib/json-simple-1.1.1.jar \
+	src/main/java/org/moonlightcontroller/samples/Fake.java \
+	src/main/java/org/moonlightcontroller/samples/RuleParser.java \
+	src/main/java/org/moonlightcontroller/samples/Rule.java \
+	src/main/java/org/moonlightcontroller/samples/actions/Action.java \
+	src/main/java/org/moonlightcontroller/samples/actions/ActionAlert.java \
+	src/main/java/org/moonlightcontroller/samples/actions/ActionDrop.java \
+	src/main/java/org/moonlightcontroller/samples/actions/ActionLog.java \
+	src/main/java/org/moonlightcontroller/samples/actions/ActionOutput.java
 cd classes
-jar cvfm $JAR_NAME ../src/main/resources/META-INF/services/org.moonlightcontroller.bal.BoxApplication * ../lib
+jar cvfm $JAR_NAME ../src/main/resources/META-INF/services/org.moonlightcontroller.bal.BoxApplication * ../lib ../.classpath ../.project
 jar uf $JAR_NAME -C ../src/main/resources META-INF/services/org.moonlightcontroller.bal.BoxApplication
 mv $JAR_NAME ..
 cd ..
