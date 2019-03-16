@@ -38,28 +38,43 @@ class DummyDumpCreator(object):
         expansion_factor = 1 - self.concentration_facotor
         self.extra_bytes = int((1.0 + expansion_factor) ** (1.0 + 7.0 * expansion_factor))
 
-    def read_patterns(self, filename):
+    def read_patterns(self, filename, binary=True):
         """
         Reads pattern with the MCA2 binary patters format
         """
         with open(os.path.realpath(filename), "rb") as patt_f:
-            while True:
-                size = patt_f.read(self.PATTERN_SIZE_LENGTH)
-                if not size:
-                    break
-                if len(size) < self.PATTERN_SIZE_LENGTH:
-                    raise CorruptPatternFileError
-                size = ord(size[0]) << 8 | ord(size[1])
-                self.logger.debug("pattern size = %d", size)
-                pattern = patt_f.read(size)
-                self.logger.debug("pattern = %s", pattern)
-                self.logger.debug("length of pattern = %s", len(pattern))
-                if len(pattern) == size:
-                    self.patterns.append(pattern)
-                else:
-                    raise CorruptPatternFileError
+            if not binary:
+                patterns = patt_f.read()
+                self.patterns = patterns.split("\n")
+            else:
+                while True:
+                    size = patt_f.read(self.PATTERN_SIZE_LENGTH)
+                    if not size:
+                        break
+                    if len(size) < self.PATTERN_SIZE_LENGTH:
+                        raise CorruptPatternFileError
+                    size = ord(size[0]) << 8 | ord(size[1])
+                    self.logger.debug("pattern size = %d", size)
+                    pattern = patt_f.read(size)
+                    self.logger.debug("pattern = %s", pattern)
+                    self.logger.debug("length of pattern = %s", len(pattern))
+                    if len(pattern) == size:
+                        self.patterns.append(pattern)
+                    else:
+                        raise CorruptPatternFileError
+            self.filter_patterns()
             self.unused_char = self.find_char_not_in_patterns()
-    
+
+    def filter_patterns(self):
+        print "before filtering has ", len(self.patterns), " patterns" 
+        self.patterns.sort(key=len, reverse=False)
+        filtered = []
+        for patt in self.patterns:
+            if not any([filt_patt in patt for filt_patt in filtered]):
+                filtered.append(patt)
+        self.patterns = filtered
+        print "after filtering has ", len(self.patterns), " patterns" 
+
     def find_char_not_in_patterns(self):
         """ 
         Finds a  plausible delimiter, acharacter not used in patterns
@@ -75,7 +90,7 @@ class DummyDumpCreator(object):
         self.packets = []
         self.count_in = 0
         self.count_out = 0
-        for _ in xrange(num_packets):
+        for i in xrange(num_packets):
             patterns = self.patterns[:]
             random.shuffle(patterns)
             if self.max_patterns:
@@ -85,14 +100,16 @@ class DummyDumpCreator(object):
             payload = ""
             max_payload = 1500 - len(packet)
             while len(patterns) and len(payload) < max_payload:
-                cur_pat = patterns.pop()
-                payload += cur_pat[:min(len(cur_pat), max_payload - len(payload))]
-                if len(patterns) and len(payload) + self.extra_bytes + 1 < max_payload:
-                    payload += self.unused_char
-                    payload += os.urandom(self.extra_bytes)
-                self.count_out += self.extra_bytes 
-                self.count_in += len(cur_pat)
+                cur_pat = patterns.pop()[:-1]
+                payload += cur_pat[:min(len(cur_pat), max_payload - len(payload) - 1)]
+                payload += self.unused_char
+                #if len(patterns) and len(payload) + self.extra_bytes + 1 < max_payload:
+                #    payload += self.unused_char
+                #    payload += os.urandom(self.extra_bytes)
+                self.count_out = 1 
+                self.count_in = 1
             packet = packet / payload
+            print i
             self.packets.append(packet)
 
     def write_to_dump(self):

@@ -406,7 +406,7 @@ public class Fake extends BoxApplication {
 							exists = true;
 						} else {
 							ToDevice newBlock = new ToDevice("ToDevice_FakeApp_" + out_iface, out_iface, netmap_en);
-							prot_hdr_clas = prot.getProtectedSubGraph(dpi, 2, 1000, 3);
+							prot_hdr_clas = prot.getProtectedSubGraph(dpi, 2, 10000, 2);
 							prot_blocks = prot_hdr_clas.getBlocks();
 							prot_out = prot_blocks.get(prot_blocks.size() - 1);
 							snort_connectors.add(new Connector.Builder()
@@ -417,7 +417,7 @@ public class Fake extends BoxApplication {
 							snort_connectors.add(new Connector.Builder()
 									.setSourceBlock(prot_out)
 									.setSourceOutputPort(1)
-									.setDestBlock(newBlock).build()
+									.setDestBlock(discard).build()
 							);
 							snort_blocks.addAll(prot_blocks);
 							snort_connectors.addAll(prot_hdr_clas.getConnectors());
