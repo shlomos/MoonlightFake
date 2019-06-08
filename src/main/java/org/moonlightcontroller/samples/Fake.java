@@ -85,6 +85,7 @@ public class Fake extends BoxApplication {
 	public static final String PROP_IN_IFC = "in_ifc";
 	public static final String PROP_RULE_FILE = "rule_file";
 	public static final String PROP_NETMAP_EN = "netmap_enabled";
+	public static final String PROP_DPI_ALGS = "dpi_algs";
 
 	public static final String DEFAULT_SEGMENT = "220";
 	public static final String DEFAULT_IN_IFC = "eth1";
@@ -92,6 +93,7 @@ public class Fake extends BoxApplication {
 	public static final String DEFAULT_NETMAP_EN = "false";
 	public static final String DEFAULT_PATTERNS_FILE = "patterns_file";
 	public static final String DEFAULT_APPLICATION_TYPE = "0";
+	public static final String DEFAULT_DPI_ALGS = "cac,ac,wm";
 
 	private static final Properties DEFAULT_PROPS = new Properties();
 	static {
@@ -101,6 +103,7 @@ public class Fake extends BoxApplication {
 		DEFAULT_PROPS.setProperty(PROP_PATTERNS_FILE, DEFAULT_PATTERNS_FILE);
 		DEFAULT_PROPS.setProperty(PROP_RULE_FILE, DEFAULT_RULE_FILE);
 		DEFAULT_PROPS.setProperty(PROP_NETMAP_EN, DEFAULT_NETMAP_EN);
+		DEFAULT_PROPS.setProperty(PROP_DPI_ALGS, DEFAULT_DPI_ALGS);
 	}
 
 	private Properties props;
@@ -121,6 +124,7 @@ public class Fake extends BoxApplication {
 		LOG.info(String.format("[->] Patterns file path: %s", props.getProperty(PROP_PATTERNS_FILE)));
 		LOG.info(String.format("[>|] Rule files path: %s", props.getProperty(PROP_RULE_FILE)));
 		LOG.info(String.format("[>|] Netmap enabled: %s", props.getProperty(PROP_NETMAP_EN)));
+		LOG.info(String.format("[>|] dpi algs: %s", props.getProperty(PROP_DPI_ALGS)));
 
 		List<IStatement> statements = createStatements();
 		this.setStatements(statements);
@@ -180,7 +184,7 @@ public class Fake extends BoxApplication {
 			while (true) {
 				String line;
 				line = reader.readLine();
-				if (line == null) {
+				if (line == null || result.size() > 10000) {
 					break;
 				} else{
 					index++;
@@ -304,7 +308,7 @@ public class Fake extends BoxApplication {
 		Map<String, Alert> alertBlocks = new HashMap<>();
 		//FromHost fh = new FromHost("FromHost_FakeApp", "virt");
 		//ToHost th = new ToHost("ToHost_FakeApp", "virt");
-		ToDump discard = new ToDump("ToDump3_FakeApp", "/home/mininet/hello_malicious.pcap");
+		ToDump discard = new ToDump("ToDump3_FakeApp", "/home/user/hello_malicious.pcap");
 		Alert alert = new Alert("Alert_FakeApp", "DPI malicious packet alert", 1, true, 1000);
 		//ToDevice to = new ToDevice("ToDevice_FakeApp_" + props.getProperty(PROP_IN_IFC), props.getProperty(PROP_IN_IFC), false);
 
@@ -318,10 +322,14 @@ public class Fake extends BoxApplication {
 		List<String> dpiPatterns = readPatternsSimple(props.getProperty(PROP_PATTERNS_FILE));
 		List<StringMatcher> dpis = new LinkedList<>();
 		alertBlocks.put(alert.getMessage(), alert);
+		Set<String> dpi_algs = new HashSet<String>(Arrays.asList(props.getProperty(PROP_DPI_ALGS).split(",")));
 		//toDeviceBlocks.put(props.getProperty(PROP_IN_IFC), to);
-		dpis.add(new StringMatcher("StringMatcher_WM_FakeApp", dpiPatterns, "wumanber")); // chhose from: wumanber, ahocorasick, compressedahocorasick
-		dpis.add(new StringMatcher("StringMatcher_AC_FakeApp", dpiPatterns, "ahocorasick"));
-		dpis.add(new StringMatcher("StringMatcher_CAC_FakeApp", dpiPatterns, "compressedahocorasick"));
+		if(dpi_algs.contains("wm"))
+			dpis.add(new StringMatcher("StringMatcher_WM_FakeApp", dpiPatterns, "wumanber", true)); // choose from: wumanber, ahocorasick, compressedahocorasick
+		if(dpi_algs.contains("ac"))
+			dpis.add(new StringMatcher("StringMatcher_AC_FakeApp", dpiPatterns, "ahocorasick", true));
+		if(dpi_algs.contains("cac"))
+			dpis.add(new StringMatcher("StringMatcher_CAC_FakeApp", dpiPatterns, "compressedahocorasick", true));
 		// ===================== Firewall =======================
 		List<HeaderClassifierRule> headerRules = new ArrayList<>();
 		List<Rule> rules;
@@ -406,7 +414,7 @@ public class Fake extends BoxApplication {
 							exists = true;
 						} else {
 							ToDevice newBlock = new ToDevice("ToDevice_FakeApp_" + out_iface, out_iface, netmap_en);
-							prot_hdr_clas = prot.getProtectedSubGraph(dpi, 2, 10000, 2);
+							prot_hdr_clas = prot.getProtectedSubGraph(dpi, 2, 10000, 1.5);
 							prot_blocks = prot_hdr_clas.getBlocks();
 							prot_out = prot_blocks.get(prot_blocks.size() - 1);
 							snort_connectors.add(new Connector.Builder()
