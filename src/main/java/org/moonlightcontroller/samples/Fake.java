@@ -93,7 +93,7 @@ public class Fake extends BoxApplication {
 	public static final String DEFAULT_NETMAP_EN = "false";
 	public static final String DEFAULT_PATTERNS_FILE = "patterns_file";
 	public static final String DEFAULT_APPLICATION_TYPE = "0";
-	public static final String DEFAULT_DPI_ALGS = "cac,ac,wm";
+	public static final String DEFAULT_DPI_ALGS = "cac,ac,wm,aco";
 
 	private static final Properties DEFAULT_PROPS = new Properties();
 	static {
@@ -330,6 +330,8 @@ public class Fake extends BoxApplication {
 			dpis.add(new StringMatcher("StringMatcher_AC_FakeApp", dpiPatterns, "ahocorasick", true));
 		if(dpi_algs.contains("cac"))
 			dpis.add(new StringMatcher("StringMatcher_CAC_FakeApp", dpiPatterns, "compressedahocorasick", true));
+		if(dpi_algs.contains("aco"))
+			dpis.add(new StringMatcher("StringMatcher_ACO_FakeApp", dpiPatterns, "ahocorasick_other", true));
 		// ===================== Firewall =======================
 		List<HeaderClassifierRule> headerRules = new ArrayList<>();
 		List<Rule> rules;
