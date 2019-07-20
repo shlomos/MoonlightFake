@@ -42,6 +42,7 @@ import org.moonlightcontroller.mtd.ApplicationType;
 import org.moonlightcontroller.processing.Connector;
 import org.moonlightcontroller.processing.IProcessingGraph;
 import org.moonlightcontroller.processing.ProcessingGraph;
+import org.moonlightcontroller.processing.NetworkStack;
 import org.moonlightcontroller.processing.IConnector;
 import org.moonlightcontroller.processing.IProcessingBlock;
 import org.moonlightcontroller.topology.InstanceLocationSpecifier;
@@ -84,13 +85,13 @@ public class Fake extends BoxApplication {
 	public static final String PROP_SEGMENT = "segment";
 	public static final String PROP_IN_IFC = "in_ifc";
 	public static final String PROP_RULE_FILE = "rule_file";
-	public static final String PROP_NETMAP_EN = "netmap_enabled";
+	public static final String PROP_NETWORK_STACK = "network_stack";
 	public static final String PROP_DPI_ALGS = "dpi_algs";
 
 	public static final String DEFAULT_SEGMENT = "220";
 	public static final String DEFAULT_IN_IFC = "eth1";
 	public static final String DEFAULT_RULE_FILE = "firewall_rules.txt";
-	public static final String DEFAULT_NETMAP_EN = "false";
+	public static final String DEFAULT_NETWORK_STACK = "kernel";
 	public static final String DEFAULT_PATTERNS_FILE = "patterns_file";
 	public static final String DEFAULT_APPLICATION_TYPE = "0";
 	public static final String DEFAULT_DPI_ALGS = "cac,ac,wm,aco";
@@ -102,7 +103,7 @@ public class Fake extends BoxApplication {
 		DEFAULT_PROPS.setProperty(PROP_IN_IFC, DEFAULT_IN_IFC);
 		DEFAULT_PROPS.setProperty(PROP_PATTERNS_FILE, DEFAULT_PATTERNS_FILE);
 		DEFAULT_PROPS.setProperty(PROP_RULE_FILE, DEFAULT_RULE_FILE);
-		DEFAULT_PROPS.setProperty(PROP_NETMAP_EN, DEFAULT_NETMAP_EN);
+		DEFAULT_PROPS.setProperty(PROP_NETWORK_STACK, DEFAULT_NETWORK_STACK);
 		DEFAULT_PROPS.setProperty(PROP_DPI_ALGS, DEFAULT_DPI_ALGS);
 	}
 
@@ -123,7 +124,7 @@ public class Fake extends BoxApplication {
 		LOG.info(String.format("[->] Interface for input: %s", props.getProperty(PROP_IN_IFC)));
 		LOG.info(String.format("[->] Patterns file path: %s", props.getProperty(PROP_PATTERNS_FILE)));
 		LOG.info(String.format("[>|] Rule files path: %s", props.getProperty(PROP_RULE_FILE)));
-		LOG.info(String.format("[>|] Netmap enabled: %s", props.getProperty(PROP_NETMAP_EN)));
+		LOG.info(String.format("[>|] Network stack: %s", props.getProperty(PROP_NETWORK_STACK)));
 		LOG.info(String.format("[>|] dpi algs: %s", props.getProperty(PROP_DPI_ALGS)));
 
 		List<IStatement> statements = createStatements();
@@ -215,7 +216,7 @@ public class Fake extends BoxApplication {
 		System.out.println("Interface hint is " + iface);
 		return iface;
 	}
-	
+
 
 	@Override
 	public void handleAppStart(IApplicationTopology top, IHandleClient handles) {
@@ -276,33 +277,43 @@ public class Fake extends BoxApplication {
 		}
 	}
 
+	private String find_interface(String name) {
+		String iface = name;
+
+		try {
+                        Enumeration<NetworkInterface> nets = NetworkInterface.getNetworkInterfaces();
+                        System.out.println(nets);
+                        for (NetworkInterface netint : Collections.list(nets)) {
+                                System.out.println("Checking: " + netint.getName() + " vs " + name);
+                                System.out.println(netint.getName() + " == " + name + " is " + netint.getName().contains(name.trim()));
+                                if (netint.getName().contains(name.trim())) {
+                                        iface = netint.getName();
+                                        break;
+                                }
+                        }
+                } catch (SocketException exp) {
+                        System.out.print("socket exception while enumerating interfaces");
+                }
+		return iface;
+	}
+
 	private List<IStatement> createStatements(){
 		String name = props.getProperty(PROP_IN_IFC);
-		boolean netmap_en = Boolean.parseBoolean(props.getProperty(PROP_NETMAP_EN));
+		NetworkStack net_stack = NetworkStack.valueOf(props.getProperty(PROP_NETWORK_STACK).toUpperCase());
 		String iface = name;
-		try {
-			Enumeration<NetworkInterface> nets = NetworkInterface.getNetworkInterfaces();
-			System.out.println(nets);
-			for (NetworkInterface netint : Collections.list(nets)) {
-				System.out.println("Checking: " + netint.getName() + " vs " + name);
-				System.out.println(netint.getName() + " == " + name + " is " + netint.getName().contains(name.trim()));
-				if (netint.getName().contains(name.trim())) {
-					iface = netint.getName();
-					break;
-				}
-			}
-		} catch (SocketException exp) {
-			System.out.print("socket exception while enumerating interfaces");
+
+		if (net_stack != NetworkStack.DPDK) {
+			iface = find_interface(name);
 		}
 
 		List<IConnector> connectors = new ArrayList<>();
 		List<IProcessingBlock> blocks = new ArrayList<>();
 		FromDevice from;
 
-		if (netmap_en) {
-			from = new FromDevice("FromDevice_FakeApp", iface, false, true, true);
+		if (net_stack != NetworkStack.KERNEL) {
+			from = new FromDevice("FromDevice_FakeApp", iface, false, true, net_stack);
 		} else {
-			from = new FromDevice("FromDevice_FakeApp", iface, true, true, false);
+			from = new FromDevice("FromDevice_FakeApp", iface, true, true, net_stack);
 		}
 		Map<String, IProcessingBlock> toDeviceBlocks = new HashMap<>();
 		Map<String, Alert> alertBlocks = new HashMap<>();
@@ -384,7 +395,7 @@ public class Fake extends BoxApplication {
 					.setPriority(r.getPriority())
 					.setOrder(i)
 					.build());
-				
+
 				IProcessingBlock last = classify;
 				int lastOutPort = i;
 				int j = 0;
@@ -415,8 +426,12 @@ public class Fake extends BoxApplication {
 							blockToAdd = destBlock;
 							exists = true;
 						} else {
-							ToDevice newBlock = new ToDevice("ToDevice_FakeApp_" + out_iface, out_iface, netmap_en);
-							prot_hdr_clas = prot.getProtectedSubGraph(dpi, 2, 10000, 1.5);
+							ToDevice newBlock = new ToDevice("ToDevice_FakeApp_" + out_iface, out_iface, net_stack);
+							double thresh = 1.5;
+							if (dpi.getMatcherType().equals("wumanber")) {
+								thresh = 4.0;
+							}
+							prot_hdr_clas = prot.getProtectedSubGraph(dpi, 2, 10000, thresh);
 							prot_blocks = prot_hdr_clas.getBlocks();
 							prot_out = prot_blocks.get(prot_blocks.size() - 1);
 							snort_connectors.add(new Connector.Builder()
