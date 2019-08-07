@@ -339,10 +339,10 @@ public class Fake extends BoxApplication {
 			dpis.add(new StringMatcher("StringMatcher_WM_FakeApp", dpiPatterns, "wumanber", true)); // choose from: wumanber, ahocorasick, compressedahocorasick
 		if(dpi_algs.contains("ac"))
 			dpis.add(new StringMatcher("StringMatcher_AC_FakeApp", dpiPatterns, "ahocorasick", true));
-		if(dpi_algs.contains("cac"))
-			dpis.add(new StringMatcher("StringMatcher_CAC_FakeApp", dpiPatterns, "compressedahocorasick", true));
 		if(dpi_algs.contains("aco"))
 			dpis.add(new StringMatcher("StringMatcher_ACO_FakeApp", dpiPatterns, "ahocorasick_other", true));
+		if(dpi_algs.contains("cac"))
+			dpis.add(new StringMatcher("StringMatcher_CAC_FakeApp", dpiPatterns, "compressedahocorasick", true));
 		// ===================== Firewall =======================
 		List<HeaderClassifierRule> headerRules = new ArrayList<>();
 		List<Rule> rules;
