@@ -429,7 +429,11 @@ public class Fake extends BoxApplication {
 							ToDevice newBlock = new ToDevice("ToDevice_FakeApp_" + out_iface, out_iface, net_stack);
 							double thresh = 1.5;
 							if (dpi.getMatcherType().equals("wumanber")) {
-								thresh = 4.0;
+								thresh = 3.9362;
+							} else if (dpi.getMatcherType().equals("compressedahocorasick")) {
+								thresh = 1.8239;
+							} else if (dpi.getMatcherType().equals("ahocorasick_other")) {
+								thresh = 2.163;
 							}
 							prot_hdr_clas = prot.getProtectedSubGraph(dpi, 2, 10000, thresh);
 							prot_blocks = prot_hdr_clas.getBlocks();
